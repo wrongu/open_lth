@@ -4,6 +4,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import argparse
+import copy
 
 
 def maybe_get_arg(arg_name, positional=False, position=0, boolean_arg=False):
@@ -21,3 +22,30 @@ def maybe_get_arg(arg_name, positional=False, position=0, boolean_arg=False):
         return getattr(args, arg_name) if arg_name in args else None
     except:
         return None
+
+
+def fix_all_seed(args):
+    """Fix all seed and modify the seed parameters to be consistent
+    Args:
+        args (argparse.Namespace): The arguments.
+    """
+    import random
+    import numpy as np
+    import torch
+    import torch.backends.cudnn as cudnn
+    args = copy.deepcopy(args)
+    seed = getattr(args, 'seed', None)
+    if seed is not None:
+        random.seed(seed)
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        torch.cuda.manual_seed(seed)
+        torch.cuda.manual_seed_all(seed)
+        cudnn.deterministic = True
+        cudnn.benchmark = False
+        args.data_order_seed = seed
+        args.transformation_seed = seed
+    return args
+
+    
+
