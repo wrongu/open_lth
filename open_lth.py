@@ -10,6 +10,9 @@ from cli import runner_registry
 from cli import arg_utils
 import platforms.registry
 
+# fix all seed and modify the seed parameters to be consistent
+from cli.arg_utils import fix_all_seed
+
 
 def main():
     # The welcome message.
@@ -36,6 +39,8 @@ def main():
     parser.add_argument('--platform', default='local', help='The platform on which to run the job.')
     parser.add_argument('--display_output_location', action='store_true',
                         help='Display the output location for this job.')
+    # Add the seed argument to fix all seed
+    parser.add_argument('--seed', type=int, default=None, help='The random seed.')
 
     # Get the platform arguments.
     platform_name = arg_utils.maybe_get_arg('platform') or 'local'
@@ -50,6 +55,9 @@ def main():
 
     args = parser.parse_args()
     platform = platforms.registry.get(platform_name).create_from_args(args)
+    # fix all the seed and add seed suffix to the save path
+    args = fix_all_seed(args)
+    platform.seed_save_path(args.seed)
 
     if args.display_output_location:
         platform.run_job(runner_registry.get(runner_name).create_from_args(args).display_output_location)

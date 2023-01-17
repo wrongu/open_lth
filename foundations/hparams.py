@@ -99,7 +99,6 @@ class Hparams(abc.ABC):
 
         return cls(**d)
 
-
     @property
     def display(self):
         nondefault_fields = [f for f in fields(self)
@@ -134,7 +133,7 @@ class DatasetHparams(Hparams):
     random_labels_fraction: float = None
     unsupervised_labels: str = None
     blur_factor: int = None
-    cv_fold: int = None
+    cv_fold = None
 
     _name: str = 'Dataset Hyperparameters'
     _description: str = 'Hyperparameters that select the dataset, data augmentation, and other data transformations.'

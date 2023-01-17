@@ -5,12 +5,13 @@
 
 import numpy as np
 from torch.utils.data import Subset
-from datasets import base, cifar10, mnist, imagenet
+from datasets import base, cifar10, mnist, imagenet, tinyimagenet, stl10
 from foundations.hparams import DatasetHparams
 from platforms.platform import get_platform
 
 
-registered_datasets = {'cifar10': cifar10, 'mnist': mnist, 'imagenet': imagenet}
+registered_datasets = {'cifar10': cifar10, 'mnist': mnist, 'imagenet': imagenet,
+                       'tinyimagenet': tinyimagenet, 'stl10': stl10}
 
 
 def get(dataset_hparams: DatasetHparams, train: bool = True):

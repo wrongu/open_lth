@@ -12,12 +12,20 @@ from platforms import base
 class Platform(base.Platform):
     @property
     def root(self):
-        return '/data2/rlange/open_lth/'
+        _root = '/project/representation-paths/checkpoints'
+        if getattr(self, 'seed', None) is not None:
+            return os.path.join(_root, f'seed_{self.seed}')
+        else:
+            return _root
 
     @property
     def dataset_root(self):
-        return '/data/'
+        return '/project/representation-paths/data'
 
     @property
     def imagenet_root(self):
-        return '/data/imagenet/'
+        return '/project/representation-paths/data/imagenet/'
+
+    def seed_save_path(self, seed):
+        """Add seed as suffix to checkpoint path."""
+        self.seed = seed
