@@ -3,18 +3,14 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-import torch.nn as nn
-import torch.nn.functional as F
-
+from torch import nn
 from foundations import hparams
 from lottery.desc import LotteryDesc
-from models import base
 from pruning import sparse_global
+from models.cifar_resnet import Model as CIFARModel
 
-from models.cifar_resnet import Model
 
-
-class Model(Model):
+class Model(CIFARModel):
     """A residual neural network as originally designed for Tiny ImageNet(Modified from CIFAR-10)."""
     def __init__(self, plan, initializer, outputs=None):
         super(Model, self).__init__(plan, initializer, outputs=None)
@@ -74,23 +70,8 @@ class Model(Model):
                 int(model_name.split('_')[2]) > 2)
 
     @staticmethod
-    def plan_from_model_name(model_name):
-
-        if not Model.is_valid_model_name(model_name):
-            raise ValueError('Invalid model name: {}'.format(model_name))
-
-        name = model_name.split('_')
-        W = 16 if len(name) == 3 else int(name[3])
-        D = int(name[2])
-        if (D - 2) % 3 != 0:
-            raise ValueError('Invalid ResNet depth: {}'.format(D))
-        D = (D - 2) // 6
-        plan = [(W, D), (2*W, D), (4*W, D)]
-        return plan
-
-    @staticmethod
-    def get_model_from_name(model_name, initializer,  outputs=200):
-        """The naming scheme for a ResNet is 'cifar_resnet_N[_W]'.
+    def get_model_from_name(model_name, initializer,  outputs=None):
+        """The naming scheme for a ResNet is 'tinyimagenet_resnet_N[_W]'.
 
         The ResNet is structured as an initial convolutional layer followed by three "segments"
         and a linear output layer. Each segment consists of D blocks. Each block is two
@@ -98,14 +79,14 @@ class Model(Model):
         has W filters, each layer in the second segment has 32W filters, and each layer in the
         third segment has 64W filters.
 
-        The name of a ResNet is 'cifar_resnet_N[_W]', where W is as described above.
+        The name of a ResNet is 'tinyimagenet_resnet_N[_W]', where W is as described above.
         N is the total number of layers in the network: 2 + 6D.
         The default value of W is 16 if it isn't provided.
 
         For example, ResNet-20 has 20 layers. Exclusing the first convolutional layer and the final
         linear layer, there are 18 convolutional layers in the blocks. That means there are nine
         blocks, meaning there are three blocks per segment. Hence, D = 3.
-        The name of the network would be 'cifar_resnet_20' or 'cifar_resnet_20_16'.
+        The name of the network would be 'tinyimagenet_resnet_20' or 'tinyimagenet_resnet_20_16'.
         """
         plan = Model.plan_from_model_name(model_name)
         return Model(plan, initializer, outputs)
