@@ -12,7 +12,7 @@ from platforms import base
 class Platform(base.Platform):
     @property
     def root(self):
-        return '/data2/rlange/open_lth/'
+        return '/data/open_lth/'
 
     @property
     def dataset_root(self):
