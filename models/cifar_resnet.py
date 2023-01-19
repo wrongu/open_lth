@@ -15,18 +15,27 @@ from pruning import sparse_global
 class Model(base.Model):
     """A residual neural network as originally designed for CIFAR-10."""
 
+    # The following properties can be overridden by subclasses to change the behavior of the class
+    KERNEL_SIZE = 3
+    MODEL_NAME = "cifar_resnet"  # subclasses need to be more specific
+    DATASET = "cifar10"
+    CLASSES = 10
+    INPUT_CH = 3
+    INPUT_H = 32
+    INPUT_W = 32
+
     class Block(nn.Module):
         """A ResNet block."""
 
-        def __init__(self, f_in: int, f_out: int, downsample=False):
+        def __init__(self, f_in: int, f_out: int, downsample=False, kernel_size=3):
             super(Model.Block, self).__init__()
             self.relu1 = nn.ReLU()
             self.relu2 = nn.ReLU()
 
             stride = 2 if downsample else 1
-            self.conv1 = nn.Conv2d(f_in, f_out, kernel_size=3, stride=stride, padding=1, bias=False)
+            self.conv1 = nn.Conv2d(f_in, f_out, kernel_size=kernel_size, stride=stride, padding=1, bias=False)
             self.bn1 = nn.BatchNorm2d(f_out)
-            self.conv2 = nn.Conv2d(f_out, f_out, kernel_size=3, stride=1, padding=1, bias=False)
+            self.conv2 = nn.Conv2d(f_out, f_out, kernel_size=kernel_size, stride=1, padding=1, bias=False)
             self.bn2 = nn.BatchNorm2d(f_out)
 
             # No parameters for shortcut connections.
@@ -47,11 +56,11 @@ class Model(base.Model):
     def __init__(self, plan, initializer, outputs=None):
         super(Model, self).__init__()
         self.relu = nn.ReLU()
-        outputs = outputs or 10
+        outputs = outputs or self.CLASSES
 
         # Initial convolution.
         current_filters = plan[0][0]
-        self.conv = nn.Conv2d(3, current_filters, kernel_size=3, stride=1, padding=1, bias=False)
+        self.conv = nn.Conv2d(3, current_filters, kernel_size=self.KERNEL_SIZE, stride=1, padding=1, bias=False)
         self.bn = nn.BatchNorm2d(current_filters)
 
         # The subsequent blocks of the ResNet.
@@ -59,7 +68,7 @@ class Model(base.Model):
         for segment_index, (filters, num_blocks) in enumerate(plan):
             for block_index in range(num_blocks):
                 downsample = segment_index > 0 and block_index == 0
-                blocks.append(Model.Block(current_filters, filters, downsample))
+                blocks.append(Model.Block(current_filters, filters, downsample, kernel_size=self.KERNEL_SIZE))
                 current_filters = filters
 
         self.blocks = nn.Sequential(*blocks)
@@ -83,18 +92,19 @@ class Model(base.Model):
     def output_layer_names(self):
         return ['fc.weight', 'fc.bias']
 
-    @staticmethod
-    def is_valid_model_name(model_name):
-        return (model_name.startswith('cifar_resnet_') and
-                5 > len(model_name.split('_')) > 2 and
-                all([x.isdigit() and int(x) > 0 for x in model_name.split('_')[2:]]) and
-                (int(model_name.split('_')[2]) - 2) % 6 == 0 and
-                int(model_name.split('_')[2]) > 2)
+    @classmethod
+    def is_valid_model_name(cls, model_name):
+        base_name_len = len(cls.MODEL_NAME.split('_'))
+        return (model_name.startswith(cls.MODEL_NAME) and
+                base_name_len+3 > len(model_name.split('_')) > base_name_len and
+                all([x.isdigit() and int(x) > 0 for x in model_name.split('_')[base_name_len:]]) and
+                (int(model_name.split('_')[base_name_len]) - 2) % 6 == 0 and
+                int(model_name.split('_')[base_name_len]) > 2)
 
-    @staticmethod
-    def hidden_numel_from_model_name(model_name):
-        plan = Model.plan_from_model_name(model_name)
-        ch, h, w = 3, 32, 32
+    @classmethod
+    def hidden_numel_from_model_name(cls, model_name):
+        plan = cls.plan_from_model_name(model_name)
+        ch, h, w = cls.INPUT_CH, cls.INPUT_H, cls.INPUT_W
         numel = ch * h * w
         # Initial conv/bn/relu
         ch = plan[0][0]
@@ -110,27 +120,27 @@ class Model(base.Model):
                 # Each block is 7 layers, plus maybe two projection stages: conv/bn/relu/conv/bn/(proj?)/skip/relu
                 numel += ch * h * w * (9 if has_projection else 7)
         # FC
-        numel += 10
+        numel += cls.CLASSES
         return numel
 
-    @staticmethod
-    def plan_from_model_name(model_name):
-
-        if not Model.is_valid_model_name(model_name):
+    @classmethod
+    def plan_from_model_name(cls, model_name):
+        if not cls.is_valid_model_name(model_name):
             raise ValueError('Invalid model name: {}'.format(model_name))
 
         name = model_name.split('_')
-        W = 16 if len(name) == 3 else int(name[3])
-        D = int(name[2])
+        base_name_len = len(cls.MODEL_NAME.split('_'))
+        W = 16 if len(name) == base_name_len + 1 else int(name[base_name_len+1])
+        D = int(name[base_name_len])
         if (D - 2) % 3 != 0:
             raise ValueError('Invalid ResNet depth: {}'.format(D))
         D = (D - 2) // 6
         plan = [(W, D), (2*W, D), (4*W, D)]
         return plan
 
-    @staticmethod
-    def get_model_from_name(model_name, initializer,  outputs=10):
-        """The naming scheme for a ResNet is 'cifar_resnet_N[_W]'.
+    @classmethod
+    def get_model_from_name(cls, model_name, initializer,  outputs=None):
+        """If MODEL_NAME is 'cifar_resnet', then the naming scheme for a ResNet is 'cifar_resnet_N[_W]'.
 
         The ResNet is structured as an initial convolutional layer followed by three "segments"
         and a linear output layer. Each segment consists of D blocks. Each block is two
@@ -147,23 +157,23 @@ class Model(base.Model):
         blocks, meaning there are three blocks per segment. Hence, D = 3.
         The name of the network would be 'cifar_resnet_20' or 'cifar_resnet_20_16'.
         """
-        plan = Model.plan_from_model_name(model_name)
-        return Model(plan, initializer, outputs)
+        plan = cls.plan_from_model_name(model_name)
+        return cls(plan, initializer, outputs)
 
     @property
     def loss_criterion(self):
         return self.criterion
 
-    @staticmethod
-    def default_hparams():
+    @classmethod
+    def default_hparams(cls):
         model_hparams = hparams.ModelHparams(
-            model_name='cifar_resnet_20',
+            model_name=f'{cls.MODEL_NAME}_20',
             model_init='kaiming_normal',
             batchnorm_init='uniform',
         )
 
         dataset_hparams = hparams.DatasetHparams(
-            dataset_name='cifar10',
+            dataset_name=cls.DATASET,
             batch_size=128,
         )
 
